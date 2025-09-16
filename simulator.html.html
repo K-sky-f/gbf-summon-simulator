@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>召喚石再使用シミュレーター</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', 'Noto Sans JP', sans-serif;
+            transition: background-color 0.5s ease;
+        }
+        .stone-card { transition: all 0.3s ease; }
+        .stone-card.usable {
+            cursor: pointer;
+            border-color: #3b82f6;
+        }
+        .stone-card.usable:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+        }
+        .stone-card.disabled {
+            filter: grayscale(80%);
+            opacity: 0.7;
+        }
+        .log-entry { animation: fadeIn 0.5s ease-in-out; }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .hidden { display: none; }
+        /* Toggle Switch CSS */
+        .switch { position: relative; display: inline-block; width: 50px; height: 28px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 28px; }
+        .slider:before { position: absolute; content: ""; height: 20px; width: 20px; left: 4px; bottom: 4px; background-color: white; transition: .4s; border-radius: 50%; }
+        input:checked + .slider { background-color: #2563eb; }
+        input:checked + .slider:before { transform: translateX(22px); }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+    <!-- 設定画面 -->
+    <div id="setup-screen" class="container mx-auto p-4 md:p-8 max-w-4xl">
+        <header class="text-center mb-8">
+            <h1 class="text-3xl md:text-4xl font-bold text-gray-900">召喚石再使用シミュレーター</h1>
+            <p class="mt-2 text-gray-600">6つの召喚石の性能を自由に設定して、シミュレーションを開始してください。</p>
+        </header>
+        <form id="setup-form">
+            <div id="stone-forms-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+                <!-- 石の設定フォームがJSで生成される -->
+            </div>
+            <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-4 rounded-lg text-xl transition-colors duration-300">
+                この設定でシミュレーションを開始
+            </button>
+        </form>
+    </div>
+
+    <!-- シミュレーション画面 (初期状態では非表示) -->
+    <div id="simulation-screen" class="hidden">
+        <div class="container mx-auto p-4 md:p-8 max-w-6xl">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <div class="lg:col-span-2 space-y-6">
+                    <div id="info-panel" class="bg-white p-6 rounded-xl shadow-md text-center">
+                        <div class="flex justify-between items-center">
+                            <h2 id="turn-counter" class="text-2xl font-bold text-blue-600">ターン: 1</h2>
+                            <div class="flex items-center gap-3">
+                                <span class="font-semibold">ヤチマ効果</span>
+                                <label class="switch">
+                                    <input type="checkbox" id="yachima-toggle">
+                                    <span class="slider"></span>
+                                </label>
+                            </div>
+                        </div>
+                        <div id="actions-left-display" class="mt-2 text-lg font-semibold text-gray-700"></div>
+                        <div id="status-effects-panel" class="mt-4 space-y-2 border-t pt-4"></div>
+                    </div>
+                    <div id="stones-container" class="grid grid-cols-2 md:grid-cols-3 gap-4"></div>
+                    <div class="bg-white p-6 rounded-xl shadow-md">
+                        <button id="skip-turn-btn" class="w-full bg-gray-500 hover:bg-gray-600 text-white font-bold py-3 px-4 rounded-lg transition-colors">何もしない (ターン終了)</button>
+                    </div>
+                    <div class="p-6 rounded-xl">
+                        <button id="reset-btn" class="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-4 rounded-lg transition-colors">設定画面に戻る</button>
+                    </div>
+                </div>
+                <div class="lg:col-span-1">
+                    <div class="bg-white p-6 rounded-xl shadow-md h-full max-h-[70vh] lg:max-h-full">
+                        <h3 class="text-lg font-semibold mb-4 border-b pb-2">行動ログ</h3>
+                        <div id="log-container" class="space-y-2 overflow-y-auto h-[calc(70vh-6rem)] lg:h-[calc(100%-3rem)] pr-2"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const setupScreen = document.getElementById('setup-screen');
+        const simulationScreen = document.getElementById('simulation-screen');
+        const setupForm = document.getElementById('setup-form');
+        const stoneFormsContainer = document.getElementById('stone-forms-container');
+        const turnCounter = document.getElementById('turn-counter');
+        const statusEffectsPanel = document.getElementById('status-effects-panel');
+        const stonesContainer = document.getElementById('stones-container');
+        const skipTurnBtn = document.getElementById('skip-turn-btn');
+        const logContainer = document.getElementById('log-container');
+        const resetBtn = document.getElementById('reset-btn');
+        const yachimaToggle = document.getElementById('yachima-toggle');
+        const actionsLeftDisplay = document.getElementById('actions-left-display');
+
+        let turn = 1, stones = [], log = [], activeStatuses = {};
+        let actionsPerTurn = 1, actionsLeftThisTurn = 1;
+        const MAX_TURNS = 999;
+
+        function createSetupForms() {
+            const defaultStones = [
+                 { name: '超越ルシフェル', reusable: true, maxCooldown: 5, initialCooldown: 0, effect: 'status', statuses: [{name: '純白の翼', duration: 4},{name: 'ディスガ', duration: 2}], memo: 'HP回復' },
+                { name: '超越バハムート', reusable: true, maxCooldown: 5, initialCooldown: 5, effect: 'shorten', statuses: [{name: '創世の翼', duration: 4}, ], memo: '' },
+                { name: 'ベルゼバブ', reusable: true, maxCooldown: 11, initialCooldown: 3, effect: 'status', statuses: [{name:'防、弱耐DOWN180秒',duration:5}], memo: 'トランスで追加効果' },
+                { name: 'ゴブロ', reusable: false, maxCooldown: 0, initialCooldown: 3, effect: 'status', statuses: [{name:'ダメカ100%', duration: 1},{name:'防御1000%UP', duration: 3},{name:'主人公攻撃時3回ダメ&ディスペル', duration: 3}], memo: '' },
+                { name: '追撃石', reusable: true, maxCooldown: 8, initialCooldown: 3, effect: 'status', statuses: [{name:'追撃20%', duration: 1},{name:'DA100%UP&TA50%UP', duration: 1}], memo: '' },
+                { name: '黒麒麟', reusable: false, maxCooldown: 0, initialCooldown: 0, effect: 'none', statuses: [], memo: '全アビリティ再使用可能' },
+            ];
+
+            for (let i = 0; i < 6; i++) {
+                const ds = defaultStones[i] || {};
+                const heading = (i === 5) ? 'フレ召喚石' : `召喚石 ${i + 1}`;
+                const formHtml = `
+                    <div class="bg-white p-4 rounded-lg shadow-md border border-gray-200" data-stone-index="${i}">
+                        <h3 class="font-bold text-lg mb-3 border-b pb-2">${heading}</h3>
+                        <div class="space-y-3">
+                            <div><label class="text-sm font-medium">名前</label><input type="text" name="name${i}" value="${ds.name || ''}" class="w-full p-2 border rounded-md mt-1"></div>
+                            <div><label class="text-sm font-medium">タイプ</label><select name="reusable${i}" class="w-full p-2 border rounded-md mt-1"><option value="true" ${ds.reusable ? 'selected' : ''}>再使用可能</option><option value="false" ${!ds.reusable ? 'selected' : ''}>再使用不可</option></select></div>
+                            <div class="reusable-option"><label class="text-sm font-medium">再使用ターン（サブ超越バハの場合1短縮して記入してください）</label><input type="number" name="maxCooldown${i}" value="${ds.maxCooldown || 8}" min="1" class="w-full p-2 border rounded-md mt-1"></div>
+                            <div><label class="text-sm font-medium">初期使用可能ターン</label><input type="number" name="initialCooldown${i}" value="${ds.initialCooldown || 0}" min="0" class="w-full p-2 border rounded-md mt-1"></div>
+                            <div>
+                                <label class="text-sm font-medium">効果タイプ</label>
+                                <select name="effectType${i}" class="w-full p-2 border rounded-md mt-1">
+                                    <option value="none" ${ds.effect === 'none' ? 'selected' : ''}>効果なし</option>
+                                    <option value="shorten" ${ds.effect === 'shorten' ? 'selected' : ''}>250バハムート（他召喚石CD1短縮）</option>
+                                    <option value="status" ${ds.effect === 'status' ? 'selected' : ''}>状態付与</option>
+                                </select>
+                            </div>
+                            <div class="status-options-container hidden"><label class="text-sm font-medium">追加の状態付与</label><div class="status-list-container space-y-2 mt-1"></div><button type="button" class="add-status-btn mt-2 text-sm bg-blue-100 hover:bg-blue-200 text-blue-800 py-1 px-3 rounded-md w-full">状態付与を追加</button></div>
+                            <div><label class="text-sm font-medium">効果（メモ）</label><textarea name="memo${i}" rows="2" class="w-full p-2 border rounded-md mt-1">${ds.memo || ''}</textarea></div>
+                        </div>
+                    </div>
+                `;
+                stoneFormsContainer.innerHTML += formHtml;
+            }
+            
+            defaultStones.forEach((ds, i) => {
+                if (ds.statuses) {
+                    ds.statuses.forEach(status => addStatusInputRow(i, status));
+                }
+            });
+
+            addFormEventListeners();
+        }
+
+        function addStatusInputRow(stoneIndex, status = { name: '', duration: 1 }) {
+            const container = document.querySelector(`[data-stone-index="${stoneIndex}"] .status-list-container`);
+            const statusRow = document.createElement('div');
+            statusRow.className = 'flex items-center gap-2 p-2 bg-gray-50 rounded-md';
+            statusRow.innerHTML = `
+                <input type="text" placeholder="状態名 (例: 麻痺)" value="${status.name}" class="status-name-input w-full p-1 border rounded-md">
+                <input type="number" placeholder="ターン" value="${status.duration}" min="1" class="status-duration-input w-20 p-1 border rounded-md text-center">
+                <button type="button" class="remove-status-btn text-red-500 hover:text-red-700 font-bold">✕</button>
+            `;
+            container.appendChild(statusRow);
+            statusRow.querySelector('.remove-status-btn').addEventListener('click', () => statusRow.remove());
+        }
+
+        function addFormEventListeners() {
+            document.querySelectorAll('[data-stone-index]').forEach((form, i) => {
+                const reusableSelect = form.querySelector(`[name="reusable${i}"]`);
+                const effectSelect = form.querySelector(`[name="effectType${i}"]`);
+                const reusableOption = form.querySelector('.reusable-option');
+                const statusOptionsContainer = form.querySelector('.status-options-container');
+                const addBtn = form.querySelector('.add-status-btn');
+
+                const toggleReusable = () => { reusableOption.style.display = reusableSelect.value === 'true' ? 'block' : 'none'; };
+                const toggleStatusOptions = () => { statusOptionsContainer.style.display = effectSelect.value === 'status' ? 'block' : 'none'; };
+                
+                reusableSelect.addEventListener('change', toggleReusable);
+                effectSelect.addEventListener('change', toggleStatusOptions);
+                addBtn.addEventListener('click', () => addStatusInputRow(i));
+                toggleReusable();
+                toggleStatusOptions();
+            });
+        }
+
+        function initializeSimulation(configuredStones) {
+            turn = 1;
+            stones = configuredStones;
+            log = [];
+            activeStatuses = {'創世の翼': 0}; // 創世の翼を初期登録
+            actionsPerTurn = yachimaToggle.checked ? 2 : 1;
+            actionsLeftThisTurn = actionsPerTurn;
+
+            stones.forEach(stone => {
+                if (stone.statuses) {
+                    stone.statuses.forEach(status => {
+                        if (status.name) activeStatuses[status.name] = 0;
+                    });
+                }
+            });
+            updateUI();
+        }
+
+        function updateUI() {
+            turnCounter.textContent = `ターン: ${turn}`;
+            actionsLeftDisplay.textContent = `このターンの残り行動回数: ${actionsLeftThisTurn}`;
+            
+            statusEffectsPanel.innerHTML = '';
+            let hasActiveStatus = false;
+            Object.keys(activeStatuses).sort().forEach(name => {
+                const duration = activeStatuses[name];
+                if (duration > 0) {
+                    hasActiveStatus = true;
+                    statusEffectsPanel.innerHTML += `<div class="text-md">${name}: <span class="font-semibold text-green-600">あと ${duration} ターン</span></div>`;
+                }
+            });
+            if (!hasActiveStatus) statusEffectsPanel.innerHTML = '<p class="text-gray-500">アクティブな状態効果はありません</p>';
+
+            stonesContainer.innerHTML = '';
+            stones.forEach(stone => {
+                const isUsable = stone.cooldown === 0 && !stone.used;
+                const card = document.createElement('div');
+                card.className = `stone-card border-2 p-4 rounded-lg shadow-sm flex flex-col justify-between ${isUsable ? 'usable bg-white' : 'disabled bg-gray-200 border-gray-300'}`;
+                
+                let mainDesc = stone.reusable ? `${stone.maxCooldown}T毎。` : `再使用不可。`;
+                
+                if (stone.effect === 'shorten') {
+                    mainDesc += '他CD短縮、創世の翼(4T)付与。';
+                } else if (stone.effect === 'status' && stone.statuses.length > 0) {
+                    mainDesc += stone.statuses.map(s => `${s.name}(${s.duration}T)`).join(', ') + '付与。';
+                }
+
+                card.innerHTML = `
+                    <div>
+                        <h4 class="font-bold text-lg">${stone.name}</h4>
+                        <p class="text-sm text-gray-500">${mainDesc}</p>
+                        ${stone.memo ? `<p class="text-xs text-gray-600 mt-2 pt-2 border-t">${stone.memo}</p>` : ''}
+                    </div>
+                    <div class="mt-3 text-center">
+                        ${stone.used ? `<span class="font-semibold text-red-600">使用済み</span>`
+                            : isUsable ? `<span class="font-semibold text-green-600">使用可能</span>`
+                            : `<span class="font-semibold text-yellow-600">あと ${stone.cooldown} ターン</span>`
+                        }
+                    </div>
+                `;
+                if (isUsable) card.addEventListener('click', () => handleStoneUse(stone.id));
+                stonesContainer.appendChild(card);
+            });
+
+            logContainer.innerHTML = '';
+            [...log].reverse().forEach(entry => {
+                logContainer.innerHTML += `<div class="log-entry text-sm p-2 rounded bg-gray-50"><span class="font-semibold">${entry.turn}T:</span> ${entry.action}</div>`;
+            });
+            logContainer.scrollTop = 0;
+        }
+
+        function handleStoneUse(stoneId) {
+            if (actionsLeftThisTurn <= 0) return;
+            const usedStone = stones.find(s => s.id === stoneId);
+            if (!usedStone || usedStone.cooldown !== 0 || usedStone.used) return;
+
+            let actionLog = `${usedStone.name} を使用した。`;
+            if (usedStone.reusable) usedStone.cooldown = usedStone.maxCooldown;
+            else usedStone.used = true;
+
+            let appliedEffects = [];
+            if (usedStone.effect === 'shorten') {
+                let count = 0;
+                stones.forEach(s => { if (s.id !== usedStone.id && s.cooldown > 0 && !s.used) { s.cooldown--; count++; } });
+                if (count > 0) appliedEffects.push(`他${count}個のCD短縮`);
+                activeStatuses['創世の翼'] = 4;
+                appliedEffects.push(`創世の翼(4T)付与`);
+            }
+            if (usedStone.effect === 'status' && usedStone.statuses.length > 0) {
+                usedStone.statuses.forEach(s => {
+                    if (s.name) {
+                        activeStatuses[s.name] = s.duration;
+                        appliedEffects.push(`${s.name}(${s.duration}T)付与`);
+                    }
+                });
+            }
+            if(appliedEffects.length > 0) actionLog += ` (${appliedEffects.join('、')})`;
+            
+            addLog(actionLog);
+            
+            actionsLeftThisTurn--;
+            if (actionsLeftThisTurn <= 0) {
+                advanceTurn();
+            } else {
+                updateUI();
+            }
+        }
+
+        function advanceTurn() {
+            stones.forEach(s => { if (s.cooldown > 0) s.cooldown--; });
+            Object.keys(activeStatuses).forEach(name => { if (activeStatuses[name] > 0) activeStatuses[name]--; });
+            turn++;
+            actionsLeftThisTurn = actionsPerTurn;
+            updateUI();
+            if (turn > MAX_TURNS) alert(`${MAX_TURNS}ターンに到達しました。`);
+        }
+
+        function addLog(action) { log.push({ turn, action }); }
+
+        setupForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const configuredStones = [];
+            for (let i = 0; i < 6; i++) {
+                const form = document.querySelector(`[data-stone-index="${i}"]`);
+                const reusable = form.querySelector(`[name="reusable${i}"]`).value === 'true';
+                const effect = form.querySelector(`[name="effectType${i}"]`).value;
+                const statuses = [];
+
+                if (effect === 'status') {
+                    form.querySelectorAll('.status-list-container .flex').forEach(row => {
+                        const name = row.querySelector('.status-name-input').value;
+                        const duration = parseInt(row.querySelector('.status-duration-input').value);
+                        if (name && duration > 0) statuses.push({ name, duration });
+                    });
+                }
+
+                configuredStones.push({
+                    id: i + 1,
+                    name: form.querySelector(`[name="name${i}"]`).value,
+                    reusable,
+                    maxCooldown: reusable ? parseInt(form.querySelector(`[name="maxCooldown${i}"]`).value) : Infinity,
+                    cooldown: parseInt(form.querySelector(`[name="initialCooldown${i}"]`).value),
+                    used: false,
+                    effect: effect,
+                    statuses,
+                    memo: form.querySelector(`[name="memo${i}"]`).value,
+                });
+            }
+            setupScreen.classList.add('hidden');
+            simulationScreen.classList.remove('hidden');
+            initializeSimulation(configuredStones);
+        });
+
+        skipTurnBtn.addEventListener('click', () => { if (actionsLeftThisTurn > 0) { addLog('ターンを終了した。'); advanceTurn(); } });
+        resetBtn.addEventListener('click', () => { simulationScreen.classList.add('hidden'); setupScreen.classList.remove('hidden'); });
+        yachimaToggle.addEventListener('change', () => {
+            actionsPerTurn = yachimaToggle.checked ? 2 : 1;
+            if (actionsLeftThisTurn > actionsPerTurn) {
+                actionsLeftThisTurn = actionsPerTurn;
+            }
+            updateUI();
+        });
+
+        createSetupForms();
+    });
+    </script>
+</body>
+</html>
