@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>周回計算ツール</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        .container {
+            max-width: 600px;
+            margin: auto;
+            padding: 20px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .input-group {
+            margin-bottom: 15px;
+        }
+        .input-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        .input-group input {
+            width: calc(100% - 12px);
+            padding: 6px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        .material-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        .material-row input {
+            flex: 1;
+        }
+        .add-btn, .reset-btn {
+            padding: 8px 12px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .add-btn {
+            background-color: #4CAF50;
+            color: white;
+        }
+        .reset-btn {
+            background-color: #f44336;
+            color: white;
+        }
+        .result {
+            margin-top: 20px;
+            font-size: 1.2em;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header">
+        <h1>周回計算ツール</h1>
+        <button id="reset-btn" class="reset-btn">リセット</button>
+    </div>
+    
+    <div class="input-group">
+        <label>目標素材</label>
+        <div id="materials-container">
+            <div class="material-row">
+                <input type="text" placeholder="素材名" class="material-name">
+                <input type="number" placeholder="目標個数" class="target-count">
+                <input type="number" placeholder="現在の個数" class="current-count">
+                <input type="number" placeholder="一周あたり平均" class="avg-per-run">
+            </div>
+        </div>
+        <button id="add-material-btn" class="add-btn">＋</button>
+    </div>
+
+    <hr>
+
+    <div class="input-group">
+        <label for="avg-time">一周あたり平均時間（分）</label>
+        <input type="number" id="avg-time" placeholder="例: 2.5">
+    </div>
+
+    <hr>
+
+    <div class="result">
+        <p>後<span id="remaining-runs">0</span>周。</p>
+        <p><span id="remaining-time-hours">0</span>時間<span id="remaining-time-minutes">0</span>分で周回完了です。</p>
+    </div>
+</div>
+
+<script>
+    const materialsContainer = document.getElementById('materials-container');
+    const addMaterialBtn = document.getElementById('add-material-btn');
+    const resetBtn = document.getElementById('reset-btn');
+    const avgTimeInput = document.getElementById('avg-time');
+    const remainingRunsSpan = document.getElementById('remaining-runs');
+    const remainingTimeHoursSpan = document.getElementById('remaining-time-hours');
+    const remainingTimeMinutesSpan = document.getElementById('remaining-time-minutes');
+
+    // 素材入力欄を追加する関数
+    function addMaterialRow() {
+        if (materialsContainer.children.length >= 9) {
+            alert('素材は最大9つまで追加できます。');
+            return;
+        }
+        const newRow = document.createElement('div');
+        newRow.classList.add('material-row');
+        newRow.innerHTML = `
+            <input type="text" placeholder="素材名" class="material-name">
+            <input type="number" placeholder="目標個数" class="target-count">
+            <input type="number" placeholder="現在の個数" class="current-count">
+            <input type="number" placeholder="一周あたり平均" class="avg-per-run">
+        `;
+        materialsContainer.appendChild(newRow);
+        attachEventListeners(); // 新しく追加した要素にもイベントリスナーを付ける
+    }
+
+    // 計算を実行する関数
+    function calculate() {
+        let maxRuns = 0;
+        const materialRows = materialsContainer.querySelectorAll('.material-row');
+
+        materialRows.forEach(row => {
+            const target = parseFloat(row.querySelector('.target-count').value) || 0;
+            const current = parseFloat(row.querySelector('.current-count').value) || 0;
+            const avg = parseFloat(row.querySelector('.avg-per-run').value) || 0;
+
+            if (target > current && avg > 0) {
+                const required = target - current;
+                const runs = Math.ceil(required / avg);
+                if (runs > maxRuns) {
+                    maxRuns = runs;
+                }
+            }
+        });
+
+        const avgTime = parseFloat(avgTimeInput.value) || 0;
+        let totalMinutes = 0;
+
+        if (maxRuns > 0 && avgTime > 0) {
+            totalMinutes = maxRuns * avgTime;
+        }
+
+        const hours = Math.floor(totalMinutes / 60);
+        const minutes = Math.round(totalMinutes % 60);
+
+        remainingRunsSpan.textContent = maxRuns;
+        remainingTimeHoursSpan.textContent = hours;
+        remainingTimeMinutesSpan.textContent = minutes;
+    }
+
+    // リセット関数
+    function reset() {
+        materialsContainer.innerHTML = `
+            <div class="material-row">
+                <input type="text" placeholder="素材名" class="material-name">
+                <input type="number" placeholder="目標個数" class="target-count">
+                <input type="number" placeholder="現在の個数" class="current-count">
+                <input type="number" placeholder="一周あたり平均" class="avg-per-run">
+            </div>
+        `;
+        avgTimeInput.value = '';
+        remainingRunsSpan.textContent = '0';
+        remainingTimeHoursSpan.textContent = '0';
+        remainingTimeMinutesSpan.textContent = '0';
+        attachEventListeners(); // リセット後もイベントリスナーを再設定
+    }
+
+    // すべての入力フィールドにイベントリスナーを付ける
+    function attachEventListeners() {
+        const inputs = materialsContainer.querySelectorAll('input');
+        inputs.forEach(input => {
+            input.removeEventListener('input', calculate); // 重複を避ける
+            input.addEventListener('input', calculate);
+        });
+        avgTimeInput.removeEventListener('input', calculate);
+        avgTimeInput.addEventListener('input', calculate);
+    }
+    
+    // イベントリスナーの設定
+    addMaterialBtn.addEventListener('click', addMaterialRow);
+    resetBtn.addEventListener('click', reset);
+    attachEventListeners(); // 初期ロード時にも設定
+
+</script>
+
+</body>
+</html>
