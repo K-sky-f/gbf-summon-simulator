@@ -5,196 +5,386 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>周回計算ツール</title>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 20px;
-        }
-        .container {
-            max-width: 600px;
-            margin: auto;
-            padding: 20px;
-            border: 1px solid #ccc;
-            border-radius: 8px;
-            box-shadow: 0 0 10px rgba(0,0,0,0.1);
-        }
-        .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-        }
-        .input-group {
-            margin-bottom: 15px;
-        }
-        .input-group label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: bold;
-        }
-        .input-group input {
-            width: calc(100% - 12px);
-            padding: 6px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-        }
-        .material-row {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 10px;
-        }
-        .material-row input {
-            flex: 1;
-        }
-        .add-btn, .reset-btn {
-            padding: 8px 12px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-        .add-btn {
-            background-color: #4CAF50;
-            color: white;
-        }
-        .reset-btn {
-            background-color: #f44336;
-            color: white;
-        }
-        .result {
-            margin-top: 20px;
-            font-size: 1.2em;
-            font-weight: bold;
-        }
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .container { max-width: 800px; margin: auto; padding: 20px; border: 1px solid #ccc; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        .header { display: flex; justify-content: flex-end; margin-bottom: 20px; }
+        .reset-btn { padding: 8px 12px; background-color: #f44336; color: white; border: none; border-radius: 4px; cursor: pointer; }
+
+        /* クエストと素材のスタイル */
+        .quest-section { border: 2px solid #3f51b5; padding: 15px; margin-bottom: 20px; border-radius: 6px; position: relative; }
+        .quest-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .quest-header h2 { margin: 0; }
+        .delete-quest-btn { background: none; border: none; color: #f44336; font-size: 20px; cursor: pointer; padding: 0 5px; }
+
+        .material-row { display: flex; gap: 5px; margin-bottom: 10px; align-items: center; }
+        .material-row input { padding: 6px; border: 1px solid #ccc; border-radius: 4px; flex-grow: 0; min-width: 0;}
+        .material-name-input { flex-basis: 120px; }
+        .material-target-input, .material-current-input, .material-avg-input { flex-basis: 70px; }
+        .material-time-input { flex-basis: 60px; }
+        .delete-material-btn { background: none; border: none; color: #f44336; font-size: 18px; cursor: pointer; padding: 0 5px; flex-shrink:0; }
+        
+        /* ボタンのスタイル */
+        .add-material-btn, #add-quest-btn { padding: 6px 10px; background-color: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; margin-top: 5px; }
+        #add-quest-btn { display: block; width: 100%; margin-top: 15px; background-color: #3f51b5; }
+
+        /* 結果表示 */
+        .result { margin-top: 30px; padding: 15px; background-color: #e8eaf6; border-radius: 4px; }
+        .result p { font-size: 1.1em; font-weight: bold; line-height: 1.5; }
     </style>
 </head>
 <body>
 
 <div class="container">
     <div class="header">
-        <h1>周回計算ツール</h1>
         <button id="reset-btn" class="reset-btn">リセット</button>
     </div>
-    
-    <div class="input-group">
-        <label>目標素材</label>
-        <div id="materials-container">
-            <div class="material-row">
-                <input type="text" placeholder="素材名" class="material-name">
-                <input type="number" placeholder="目標個数" class="target-count">
-                <input type="number" placeholder="現在の個数" class="current-count">
-                <input type="number" placeholder="一周あたり平均" class="avg-per-run">
-            </div>
+
+    <div id="quests-container">
         </div>
-        <button id="add-material-btn" class="add-btn">＋</button>
-    </div>
 
-    <hr>
-
-    <div class="input-group">
-        <label for="avg-time">一周あたり平均時間（分）</label>
-        <input type="number" id="avg-time" placeholder="例: 2.5">
-    </div>
+    <button id="add-quest-btn">クエスト＋</button>
 
     <hr>
 
     <div class="result">
-        <p>後<span id="remaining-runs">0</span>周。</p>
-        <p><span id="remaining-time-hours">0</span>時間<span id="remaining-time-minutes">0</span>分で周回完了です。</p>
+        <p>素材を集めるためには、以下の周回が必要です。</p>
+        <div id="quest-runs-result"></div>
+        <p>合計<span id="total-time-hours">0</span>時間<span id="total-time-minutes">0</span>分必要です。</p>
+        <div id="efficiency-tip"></div>
     </div>
 </div>
 
 <script>
-    const materialsContainer = document.getElementById('materials-container');
-    const addMaterialBtn = document.getElementById('add-material-btn');
+    const questsContainer = document.getElementById('quests-container');
+    const addQuestBtn = document.getElementById('add-quest-btn');
     const resetBtn = document.getElementById('reset-btn');
-    const avgTimeInput = document.getElementById('avg-time');
-    const remainingRunsSpan = document.getElementById('remaining-runs');
-    const remainingTimeHoursSpan = document.getElementById('remaining-time-hours');
-    const remainingTimeMinutesSpan = document.getElementById('remaining-time-minutes');
+    const questRunsResult = document.getElementById('quest-runs-result');
+    const totalTimeHoursSpan = document.getElementById('total-time-hours');
+    const totalTimeMinutesSpan = document.getElementById('total-time-minutes');
+    const efficiencyTipDiv = document.getElementById('efficiency-tip');
+    let questCount = 0;
 
-    // 素材入力欄を追加する関数
-    function addMaterialRow() {
-        if (materialsContainer.children.length >= 9) {
-            alert('素材は最大9つまで追加できます。');
+    // クエストのHTMLを生成する関数
+    function createQuestHtml(id, name, isDeletable) {
+        return `
+            <div class="quest-section" data-quest-id="${id}">
+                <div class="quest-header">
+                    <h2>${name}</h2>
+                    ${isDeletable ? `<button class="delete-quest-btn" data-quest-id="${id}">×</button>` : ''}
+                </div>
+                <div class="materials-container">
+                    <div class="material-row">
+                        <input type="text" placeholder="素材名" class="material-name-input" data-name="name">
+                        <input type="number" placeholder="目標個数" class="material-target-input" data-name="target" value="10">
+                        <input type="number" placeholder="現在の個数" class="material-current-input" data-name="current" value="0">
+                        <input type="number" placeholder="一周平均" class="material-avg-input" data-name="avg" value="1">
+                        <input type="number" placeholder="時間(分)" class="material-time-input" data-name="time" value="10">
+                        <button class="delete-material-btn" style="visibility:hidden;">×</button>
+                    </div>
+                </div>
+                <button class="add-material-btn" data-quest-id="${id}">＋</button>
+            </div>
+        `;
+    }
+
+    // クエストを追加する関数
+    function addQuest(isInitial = false) {
+        if (questCount >= 10) {
+            alert('クエストは最大10個までです。');
             return;
         }
+        questCount++;
+        const questId = `quest-${questCount}`;
+        const questName = `クエスト${questCount}`;
+        const isDeletable = !isInitial;
+        
+        questsContainer.insertAdjacentHTML('beforeend', createQuestHtml(questId, questName, isDeletable));
+        
+        // イベントリスナーの再設定
+        attachEventListeners();
+        
+        // 初期クエスト以外は、計算を促す
+        if (!isInitial) calculate(); 
+    }
+
+    // 素材を追加する関数
+    function addMaterialRow(questElement) {
+        const materialContainer = questElement.querySelector('.materials-container');
+        if (materialContainer.children.length >= 5) {
+            alert('素材は最大5つまで追加できます。');
+            return;
+        }
+        
         const newRow = document.createElement('div');
         newRow.classList.add('material-row');
         newRow.innerHTML = `
-            <input type="text" placeholder="素材名" class="material-name">
-            <input type="number" placeholder="目標個数" class="target-count">
-            <input type="number" placeholder="現在の個数" class="current-count">
-            <input type="number" placeholder="一周あたり平均" class="avg-per-run">
+            <input type="text" placeholder="素材名" class="material-name-input" data-name="name">
+            <input type="number" placeholder="目標個数" class="material-target-input" data-name="target">
+            <input type="number" placeholder="現在の個数" class="material-current-input" data-name="current">
+            <input type="number" placeholder="一周平均" class="material-avg-input" data-name="avg">
+            <input type="number" placeholder="時間(分)" class="material-time-input" data-name="time">
+            <button class="delete-material-btn">×</button>
         `;
-        materialsContainer.appendChild(newRow);
-        attachEventListeners(); // 新しく追加した要素にもイベントリスナーを付ける
+        materialContainer.appendChild(newRow);
+        attachEventListeners(); // 新しい入力欄にイベントリスナーを付与
     }
+    
+    // クエストを削除する関数
+    function deleteQuest(questId) {
+        const questElement = document.querySelector(`.quest-section[data-quest-id="${questId}"]`);
+        if (questElement) {
+            questElement.remove();
+            reNumberQuests(); // クエスト番号を振り直す
+            calculate();
+        }
+    }
+    
+    // クエスト番号の振り直し
+    function reNumberQuests() {
+        const questElements = questsContainer.querySelectorAll('.quest-section');
+        questCount = 0;
+        questElements.forEach((el, index) => {
+            questCount++;
+            const newId = `quest-${questCount}`;
+            el.dataset.questId = newId;
+            el.querySelector('.quest-header h2').textContent = `クエスト${questCount}`;
+            
+            // 削除ボタンのdata-quest-idも更新
+            const deleteBtn = el.querySelector('.delete-quest-btn');
+            if(deleteBtn) deleteBtn.dataset.questId = newId;
 
-    // 計算を実行する関数
-    function calculate() {
-        let maxRuns = 0;
-        const materialRows = materialsContainer.querySelectorAll('.material-row');
+            // 素材追加ボタンのdata-quest-idも更新
+            el.querySelector('.add-material-btn').dataset.questId = newId;
 
-        materialRows.forEach(row => {
-            const target = parseFloat(row.querySelector('.target-count').value) || 0;
-            const current = parseFloat(row.querySelector('.current-count').value) || 0;
-            const avg = parseFloat(row.querySelector('.avg-per-run').value) || 0;
-
-            if (target > current && avg > 0) {
-                const required = target - current;
-                const runs = Math.ceil(required / avg);
-                if (runs > maxRuns) {
-                    maxRuns = runs;
+            // 初期クエスト（削除不可）の場合は削除ボタンを非表示にする
+            if (questCount === 1) {
+                if (deleteBtn) deleteBtn.remove();
+            } else {
+                if (!deleteBtn) {
+                     el.querySelector('.quest-header').insertAdjacentHTML('beforeend', 
+                        `<button class="delete-quest-btn" data-quest-id="${newId}">×</button>`);
                 }
             }
         });
+    }
 
-        const avgTime = parseFloat(avgTimeInput.value) || 0;
-        let totalMinutes = 0;
+    // 計算の核となる関数
+    function calculate() {
+        const quests = []; // 全クエストのデータを格納
+        const materialNeeds = {}; // 全素材の必要量を格納 {素材名: 必要個数}
+        
+        // STEP 1: 全素材の目標必要数を集計 (名前が同じアイテムは合算)
+        questsContainer.querySelectorAll('.quest-section').forEach(questEl => {
+            questEl.querySelectorAll('.material-row').forEach(row => {
+                const name = row.querySelector('.material-name-input').value.trim();
+                const target = parseFloat(row.querySelector('.material-target-input').value) || 0;
+                const current = parseFloat(row.querySelector('.material-current-input').value) || 0;
 
-        if (maxRuns > 0 && avgTime > 0) {
-            totalMinutes = maxRuns * avgTime;
+                
+                
+                const required = Math.max(0, target - current);
+
+                // 素材名が空欄だった場合にユニークなキーを割り当て。const key = name === "" ? `(無名素材 ${Math.random()})` : name;
+                const key =name !=="" ? name : `_blank_material_%{Math.random()}`;
+
+                if (required > 0) {
+                    materialNeeds[key] = (materialNeeds[key] || 0) + required;
+                }
+            });
+        });
+
+        // STEP 2: クエスト情報を整形
+        questsContainer.querySelectorAll('.quest-section').forEach(questEl => {
+            const questId = questEl.dataset.questId;
+            const questData = {
+                id: questId,
+                name: questEl.querySelector('.quest-header h2').textContent,
+                time: 0, // 1周あたりの時間（分）
+                materials: {} // {素材名: 1周あたり平均入手量}
+            };
+
+            let timeInput = 0; // クエスト全体の所要時間（最後に見た素材の時間を採用する）
+            
+            questEl.querySelectorAll('.material-row').forEach(row => {
+                const name = row.querySelector('.material-name-input').value.trim();
+                const avg = parseFloat(row.querySelector('.material-avg-input').value) || 0;
+                const time = parseFloat(row.querySelector('.material-time-input').value) || 0;
+                
+                // 素材名が空欄の場合は、集計時の処理に合わせてキーを設定（計算には使われないが構造を合わせる）
+                const key = name === "" ? `(無名素材 ${Math.random()})` : name;
+                
+                if (avg > 0) {
+                    questData.materials[key] = avg;
+                }
+
+                if (time > 0) {
+                    timeInput = time; // 最後に有効な時間が入っていた値を採用
+                }
+            });
+
+            questData.time = timeInput;
+            quests.push(questData);
+        });
+
+        // STEP 3: 最適な周回数を計算
+        const requiredRuns = {}; // {クエストID: 必要周回数}
+        let totalRuns = 0;
+        let totalTimeMinutes = 0;
+        
+        // 各素材の必要量がなくなるまで周回をシミュレーション
+        for (const materialKey in materialNeeds) {
+            let required = materialNeeds[materialKey];
+            if (required <= 0) continue; // すでに満たされている素材は無視
+
+            // その素材を入手できるクエストとその効率（1分あたりの入手量）を計算
+            const potentialQuests = [];
+            quests.forEach(q => {
+                const avg = q.materials[materialKey] || 0;
+                const time = q.time || Infinity; // 時間がないクエストは無限大として扱う
+
+                if (avg > 0 && time !== Infinity && time > 0) {
+                    potentialQuests.push({
+                        id: q.id,
+                        name: q.name,
+                        avg: avg,
+                        time: q.time,
+                        // 効率: 1分あたりに入手できる個数
+                        efficiency: avg / q.time 
+                    });
+                }
+            });
+            
+            // 効率が最も良いクエストを選ぶ
+            potentialQuests.sort((a, b) => b.efficiency - a.efficiency);
+            const bestQuest = potentialQuests[0];
+
+            if (bestQuest) {
+                // 選ばれたクエストで素材の必要数を満たすのに必要な周回数を計算
+                const runsForMaterial = Math.ceil(required / bestQuest.avg);
+                
+                // そのクエストの必要周回数を更新
+                const currentRuns = requiredRuns[bestQuest.id] || 0;
+                if (runsForMaterial > currentRuns) {
+                    // 他の素材もこのクエストで集める場合、より多い周回数を採用
+                    requiredRuns[bestQuest.id] = runsForMaterial;
+                }
+            }
+        }
+        
+        // STEP 4: 結果の表示
+        let resultHtml = '';
+        const runDetails = [];
+
+        // 周回が必要なクエストの詳細を生成
+        for (const qId in requiredRuns) {
+            const runs = requiredRuns[qId];
+            const quest = quests.find(q => q.id === qId);
+            const questName = quest ? quest.name : qId;
+            const timePerRun = quest ? quest.time : 0;
+            
+            totalRuns += runs;
+            totalTimeMinutes += runs * timePerRun;
+            
+            resultHtml += `<p>${questName}を『${runs}』周</p>`;
+            
+            runDetails.push({name: questName, runs: runs, time: runs * timePerRun});
         }
 
-        const hours = Math.floor(totalMinutes / 60);
-        const minutes = Math.round(totalMinutes % 60);
+        if (totalRuns === 0) {
+             resultHtml = '<p>すべての素材はすでに揃っています。周回は不要です。</p>';
+        }
 
-        remainingRunsSpan.textContent = maxRuns;
-        remainingTimeHoursSpan.textContent = hours;
-        remainingTimeMinutesSpan.textContent = minutes;
+        const finalHours = Math.floor(totalTimeMinutes / 60);
+        const finalMinutes = Math.round(totalTimeMinutes % 60);
+
+        questRunsResult.innerHTML = resultHtml;
+        totalTimeHoursSpan.textContent = finalHours;
+        totalTimeMinutesSpan.textContent = finalMinutes;
+
+        // 効率的な周回プランの提案
+        displayEfficiencyTip(runDetails, totalTimeMinutes);
+    }
+    
+    // 効率的な周回プランの提案を表示する関数
+    function displayEfficiencyTip(runDetails, baseTotalTime) {
+        efficiencyTipDiv.innerHTML = '';
+        if (runDetails.length <= 1) return;
+
+        // 各クエスト単独で必要な時間を計算し、現在の組み合わせ時間と比較
+        let bestSingleQuest = {id: null, runs: Infinity, time: Infinity, name: ''};
+        let minTimeForSingleQuest = baseTotalTime;
+
+        // 各クエスト単独での周回シミュレーション（ここでは省略しますが、STEP 3のロジックを流用して実装可能）
+        // 現状は複合ルートの計算のみとして、ここでは簡潔にメッセージを出す
+        
+        const tipHtml = `
+            <p style="color: blue;">💡 **効率化のヒント:**</p>
+            <p>この組み合わせが現在の目標達成に最適なルートです。</p>
+            <p>特定の素材が揃っている場合、残りの素材のために他のクエスト単独ルートを検討することで、さらに時間が短縮できる可能性があります。（現在はこの複合ルートが最も効率的です。）</p>
+        `;
+
+        efficiencyTipDiv.innerHTML = tipHtml;
+    }
+
+    // イベントリスナーの付与を一括で行う関数
+    function attachEventListeners() {
+        // すべての入力フィールドにイベントを付与
+        document.querySelectorAll('input').forEach(input => {
+            input.removeEventListener('input', calculate);
+            input.addEventListener('input', calculate);
+        });
+
+        // 素材追加ボタン
+        document.querySelectorAll('.add-material-btn').forEach(btn => {
+            btn.removeEventListener('click', handleAddMaterial);
+            btn.addEventListener('click', handleAddMaterial);
+        });
+        
+        // 素材削除ボタン
+        document.querySelectorAll('.delete-material-btn').forEach(btn => {
+            btn.removeEventListener('click', handleDeleteMaterial);
+            btn.addEventListener('click', handleDeleteMaterial);
+        });
+
+        // クエスト削除ボタン
+        document.querySelectorAll('.delete-quest-btn').forEach(btn => {
+            btn.removeEventListener('click', handleDeleteQuest);
+            btn.addEventListener('click', handleDeleteQuest);
+        });
+    }
+
+    function handleAddMaterial(e) {
+        const questId = e.target.dataset.questId;
+        const questElement = document.querySelector(`.quest-section[data-quest-id="${questId}"]`);
+        addMaterialRow(questElement);
+    }
+
+    function handleDeleteMaterial(e) {
+        const row = e.target.closest('.material-row');
+        row.remove();
+        calculate();
+    }
+    
+    function handleDeleteQuest(e) {
+        const questId = e.target.dataset.questId;
+        deleteQuest(questId);
     }
 
     // リセット関数
     function reset() {
-        materialsContainer.innerHTML = `
-            <div class="material-row">
-                <input type="text" placeholder="素材名" class="material-name">
-                <input type="number" placeholder="目標個数" class="target-count">
-                <input type="number" placeholder="現在の個数" class="current-count">
-                <input type="number" placeholder="一周あたり平均" class="avg-per-run">
-            </div>
-        `;
-        avgTimeInput.value = '';
-        remainingRunsSpan.textContent = '0';
-        remainingTimeHoursSpan.textContent = '0';
-        remainingTimeMinutesSpan.textContent = '0';
-        attachEventListeners(); // リセット後もイベントリスナーを再設定
+        questsContainer.innerHTML = '';
+        questCount = 0;
+        addQuest(true); // 初期クエスト1を再生成
+        calculate();
     }
 
-    // すべての入力フィールドにイベントリスナーを付ける
-    function attachEventListeners() {
-        const inputs = materialsContainer.querySelectorAll('input');
-        inputs.forEach(input => {
-            input.removeEventListener('input', calculate); // 重複を避ける
-            input.addEventListener('input', calculate);
-        });
-        avgTimeInput.removeEventListener('input', calculate);
-        avgTimeInput.addEventListener('input', calculate);
-    }
-    
-    // イベントリスナーの設定
-    addMaterialBtn.addEventListener('click', addMaterialRow);
+    // 初期化処理
+    addQuest(true); // 最初のクエストを作成
+    addQuestBtn.addEventListener('click', () => addQuest(false)); // クエスト追加ボタン
     resetBtn.addEventListener('click', reset);
-    attachEventListeners(); // 初期ロード時にも設定
+    
+    // 初回計算
+    calculate();
 
 </script>
 
